@@ -1,35 +1,39 @@
-name: Deploy Docker App to EC2
+name: Deploy to EC2
 
 on:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1 — Checkout code
-      - name: Checkout repository
+      # Step 1 — Checkout repository code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2 — Load SSH key
-      - name: Add SSH private key
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      # Step 3 — Copy files to EC2
-      - name: Upload project to EC2
+      # Step 2 — Configure SSH key
+      - name: Setup SSH key
         run: |
-          scp -o StrictHostKeyChecking=no -r ./* \
-          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/docker-app/
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      # Step 4 — Connect & Deploy with Docker Compose
-      - name: Deploy over SSH
+      # Step 3 — Create target directory on EC2
+      - name: Prepare EC2 directory
         run: |
-          ssh -o StrictHostKeyChecking=no \
-          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
-          "cd docker-app && \
-           docker compose down && \
-           docker compose up -d --build"
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+          "mkdir -p ~/app && sudo chown -R ${{ secrets.EC2_USER }}: ${{ secrets.EC2_USER }}/app"
+
+      # Step 4 — Copy repository files to EC2
+      - name: Copy files to EC2
+        run: |
+          scp -o StrictHostKeyChecking=no -r ./* ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/app
+
+      # Step 5 — Optional: run commands on EC2
+      - name: Deploy app via SSH
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+          "cd ~/app && ls -la && echo 'Deployment complete!'"
