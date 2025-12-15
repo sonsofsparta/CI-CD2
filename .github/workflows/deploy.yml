@@ -1,0 +1,35 @@
+name: Deploy Docker App to EC2
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1 — Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2 — Load SSH key
+      - name: Add SSH private key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      # Step 3 — Copy files to EC2
+      - name: Upload project to EC2
+        run: |
+          scp -o StrictHostKeyChecking=no -r ./* \
+          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/docker-app/
+
+      # Step 4 — Connect & Deploy with Docker Compose
+      - name: Deploy over SSH
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+          "cd docker-app && \
+           docker compose down && \
+           docker compose up -d --build"
