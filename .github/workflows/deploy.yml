@@ -13,26 +13,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2 — Configure SSH key
-      - name: Setup SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+      # Step 2 — Use a dedicated action to handle the SSH Key
+      # This handles permissions, the SSH agent, and formatting automatically
+      - name: Install SSH Key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          # This automatically adds the host to known_hosts so you don't get prompted
+          known_hosts: ${{ secrets.EC2_HOST }}
+          if_key_exists: fail
 
-      # Step 3 — Create target directory on EC2
+      # Step 3 — Create target directory and fix permissions
       - name: Prepare EC2 directory
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
-          "mkdir -p ~/app && sudo chown -R ${{ secrets.EC2_USER }}: ${{ secrets.EC2_USER }}/app"
+          "mkdir -p ~/app && sudo chown -R ${{ secrets.EC2_USER }}:${{ secrets.EC2_USER }} ~/app"
 
       # Step 4 — Copy repository files to EC2
       - name: Copy files to EC2
         run: |
           scp -o StrictHostKeyChecking=no -r ./* ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/app
 
-      # Step 5 — Optional: run commands on EC2
+      # Step 5 — Run deployment commands
       - name: Deploy app via SSH
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
